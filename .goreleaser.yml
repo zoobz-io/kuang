@@ -1,10 +1,10 @@
 version: 2
-project_name: sumatra
+project_name: kuang
 
 builds:
-  - id: sumatra
+  - id: kuang
     main: ./cmd/app
-    binary: sumatra
+    binary: kuang
     env:
       - CGO_ENABLED=0
     goos:
@@ -21,7 +21,7 @@ builds:
 archives:
   - id: binary
     builds:
-      - sumatra
+      - kuang
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
@@ -45,6 +45,6 @@ changelog:
 release:
   github:
     owner: zoobzio
-    name: sumatra
+    name: kuang
   draft: false
   prerelease: auto
