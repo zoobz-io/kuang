@@ -104,12 +104,12 @@ func IdentityFromContext(ctx context.Context) *Identity {
 
 // Authenticator returns a rocco identity extractor that reads the Identity
 // injected by the Terminate middleware.
-func Authenticator() func(*http.Request) rocco.Identity {
-	return func(r *http.Request) rocco.Identity {
+func Authenticator() func(context.Context, *http.Request) (rocco.Identity, error) {
+	return func(_ context.Context, r *http.Request) (rocco.Identity, error) {
 		if id, ok := r.Context().Value(identityKey{}).(*Identity); ok {
-			return id
+			return id, nil
 		}
-		return rocco.NoIdentity{}
+		return rocco.NoIdentity{}, nil
 	}
 }
 

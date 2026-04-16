@@ -457,7 +457,10 @@ func TestAuthenticatorWithIdentity(t *testing.T) {
 	ctx := context.WithValue(req.Context(), identityKey{}, id)
 	req = req.WithContext(ctx)
 
-	result := Authenticator()(req)
+	result, err := Authenticator()(ctx, req)
+	if err != nil {
+		t.Fatalf("Authenticator error: %v", err)
+	}
 	if result.ID() != "bot" {
 		t.Errorf("ID = %q, want bot", result.ID())
 	}
@@ -465,7 +468,10 @@ func TestAuthenticatorWithIdentity(t *testing.T) {
 
 func TestAuthenticatorWithoutIdentity(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
-	result := Authenticator()(req)
+	result, err := Authenticator()(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Authenticator error: %v", err)
+	}
 
 	if _, ok := result.(rocco.NoIdentity); !ok {
 		t.Errorf("expected NoIdentity, got %T", result)
