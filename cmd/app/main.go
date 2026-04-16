@@ -7,11 +7,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/zoobzio/aperture"
-	"github.com/zoobzio/capitan"
-	"github.com/zoobzio/sum"
-	"github.com/zoobzio/kuang/events"
-	intotel "github.com/zoobzio/kuang/internal/otel"
+	"github.com/zoobz-io/aperture"
+	"github.com/zoobz-io/capitan"
+	"github.com/zoobz-io/sum"
+	"github.com/zoobz-io/kuang/events"
+	intotel "github.com/zoobz-io/kuang/internal/otel"
 )
 
 func main() {
@@ -68,8 +68,8 @@ func run() error {
 	// 3. Create and Register Stores
 	// =========================================================================
 
-	// Import: "github.com/zoobzio/kuang/api/stores"
-	// Import: "github.com/zoobzio/kuang/contracts"
+	// Import: "github.com/zoobz-io/kuang/api/stores"
+	// Import: "github.com/zoobz-io/kuang/contracts"
 	//
 	// allStores, err := stores.New(db, renderer, bucketProvider)
 	// if err != nil {
@@ -144,7 +144,7 @@ func run() error {
 	// 7. Register Handlers and Run
 	// =========================================================================
 
-	// Import: "github.com/zoobzio/kuang/handlers"
+	// Import: "github.com/zoobz-io/kuang/handlers"
 	// svc.Handle(handlers.All()...)
 
 	// appCfg := sum.MustUse[config.App](ctx)

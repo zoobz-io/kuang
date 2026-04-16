@@ -1,7 +1,7 @@
 // Package events provides event definitions for the application.
 package events
 
-import "github.com/zoobzio/capitan"
+import "github.com/zoobz-io/capitan"
 
 // Startup signals for server lifecycle.
 // These are direct capitan signals (not sum.Event) since they're
