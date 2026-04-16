@@ -6,15 +6,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: sumatra
-      POSTGRES_USER: sumatra
-      POSTGRES_PASSWORD: sumatra
+      POSTGRES_DB: kuang
+      POSTGRES_USER: kuang
+      POSTGRES_PASSWORD: kuang
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sumatra"]
+      test: ["CMD-SHELL", "pg_isready -U kuang"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -28,7 +28,7 @@ services:
       - ./migrations:/migrations:ro
     environment:
       GOOSE_DRIVER: postgres
-      GOOSE_DBSTRING: "host=postgres port=5432 user=sumatra password=sumatra dbname=sumatra sslmode=disable"
+      GOOSE_DBSTRING: "host=postgres port=5432 user=kuang password=kuang dbname=kuang sslmode=disable"
       GOOSE_MIGRATION_DIR: /migrations
 
   redis:
@@ -47,8 +47,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: sumatra
-      MINIO_ROOT_PASSWORD: sumatradev
+      MINIO_ROOT_USER: kuang
+      MINIO_ROOT_PASSWORD: kuangdev
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -140,19 +140,19 @@ services:
       APP_PORT: "8080"
       APP_DB_HOST: postgres
       APP_DB_PORT: "5432"
-      APP_DB_NAME: sumatra
-      APP_DB_USER: sumatra
-      APP_DB_PASSWORD: sumatra
+      APP_DB_NAME: kuang
+      APP_DB_USER: kuang
+      APP_DB_PASSWORD: kuang
       APP_DB_SSLMODE: disable
       APP_REDIS_ADDR: redis:6379
       APP_STORAGE_ENDPOINT: minio:9000
-      APP_STORAGE_ACCESS_KEY: sumatra
-      APP_STORAGE_SECRET_KEY: sumatradev
-      APP_STORAGE_BUCKET: sumatra
+      APP_STORAGE_ACCESS_KEY: kuang
+      APP_STORAGE_SECRET_KEY: kuangdev
+      APP_STORAGE_BUCKET: kuang
       APP_STORAGE_USE_SSL: "false"
       APP_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_SERVICE_NAME: sumatra
+      OTEL_SERVICE_NAME: kuang
     ports:
       - "8080:8080"
     volumes:

@@ -7,7 +7,7 @@ Shared data access layer implementations.
 Implement storage operations using `sum.Database`, `sum.Store`, or `sum.Bucket` wrappers. Stores are shared across all API surfaces — the same store can satisfy both public and admin contracts.
 
 A single `Users` store might satisfy:
-- `api/contracts.Users` (Get, Set, GetByLogin)
+- `contracts.Users` (Get, Set, GetByLogin)
 - `admin/contracts.Users` (Get, Set, Delete, List, Count)
 
 The store implements all methods; each contract exposes only what that surface needs.
@@ -24,7 +24,7 @@ import (
     "github.com/jmoiron/sqlx"
     "github.com/zoobzio/astql"
     "github.com/zoobzio/sum"
-    "github.com/zoobzio/sumatra/models"
+    "github.com/zoobzio/kuang/models"
 )
 
 type Users struct {

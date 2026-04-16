@@ -15,9 +15,9 @@ package handlers
 import (
     "github.com/zoobzio/rocco"
     "github.com/zoobzio/sum"
-    "github.com/zoobzio/sumatra/api/contracts"
-    "github.com/zoobzio/sumatra/api/transformers"
-    "github.com/zoobzio/sumatra/wire"
+    "github.com/zoobzio/kuang/contracts"
+    "github.com/zoobzio/kuang/transformers"
+    "github.com/zoobzio/kuang/wire"
 )
 
 var GetMe = rocco.GET("/me", func(req *rocco.Request[rocco.NoBody]) (wire.UserResponse, error) {

@@ -13,8 +13,8 @@ Provide a clean separation between internal models and API types. Transformers h
 package transformers
 
 import (
-    "github.com/zoobzio/sumatra/models"
-    "github.com/zoobzio/sumatra/wire"
+    "github.com/zoobzio/kuang/models"
+    "github.com/zoobzio/kuang/wire"
 )
 
 // UserToResponse transforms a User model to an API response.
