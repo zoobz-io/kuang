@@ -5,8 +5,9 @@ go 1.25.0
 toolchain go1.25.3
 
 require (
-	github.com/zoobz-io/aperture v1.0.3
+	github.com/spf13/cobra v1.10.2
 	github.com/zoobz-io/capitan v1.0.2
+	github.com/zoobz-io/check v0.0.5
 	github.com/zoobz-io/rocco v0.1.21
 	github.com/zoobz-io/sctx v1.0.3
 	github.com/zoobz-io/sum v0.0.12
@@ -20,6 +21,7 @@ require (
 	go.opentelemetry.io/otel/sdk/log v0.14.0
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -30,12 +32,10 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmoiron/sqlx v1.4.0 // indirect
-	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/zoobz-io/astql v1.0.7 // indirect
 	github.com/zoobz-io/atom v1.0.1 // indirect
 	github.com/zoobz-io/cereal v0.1.2 // indirect
-	github.com/zoobz-io/check v0.0.5 // indirect
 	github.com/zoobz-io/dbml v1.0.1 // indirect
 	github.com/zoobz-io/edamame v1.0.2 // indirect
 	github.com/zoobz-io/fig v0.0.3 // indirect
@@ -59,5 +59,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250825161204-c5933d9347a5 // indirect
 	google.golang.org/grpc v1.75.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
