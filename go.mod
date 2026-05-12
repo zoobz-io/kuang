@@ -7,7 +7,7 @@ toolchain go1.25.3
 require (
 	github.com/spf13/cobra v1.10.2
 	github.com/zoobz-io/capitan v1.0.2
-	github.com/zoobz-io/check v0.0.5
+	github.com/zoobz-io/fig v0.0.3
 	github.com/zoobz-io/rocco v0.1.21
 	github.com/zoobz-io/sctx v1.0.3
 	github.com/zoobz-io/sum v0.0.12
@@ -36,9 +36,9 @@ require (
 	github.com/zoobz-io/astql v1.0.7 // indirect
 	github.com/zoobz-io/atom v1.0.1 // indirect
 	github.com/zoobz-io/cereal v0.1.2 // indirect
+	github.com/zoobz-io/check v0.0.5 // indirect
 	github.com/zoobz-io/dbml v1.0.1 // indirect
 	github.com/zoobz-io/edamame v1.0.2 // indirect
-	github.com/zoobz-io/fig v0.0.3 // indirect
 	github.com/zoobz-io/grub v0.1.17 // indirect
 	github.com/zoobz-io/lucene v0.0.4 // indirect
 	github.com/zoobz-io/openapi v1.0.2 // indirect

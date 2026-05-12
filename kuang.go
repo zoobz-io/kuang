@@ -1,0 +1,132 @@
+// Package kuang provides a framework for building mTLS-secured API servers
+// that expose tools to AI agents via MCP.
+package kuang
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/zoobz-io/fig"
+	"github.com/zoobz-io/rocco"
+	"github.com/zoobz-io/sum"
+
+	"github.com/zoobz-io/kuang/config"
+	"github.com/zoobz-io/kuang/internal/auth"
+)
+
+// Module is a function that registers services and returns endpoints.
+// Each module receives the application context and the sum registry key,
+// allowing it to register services and load configuration before returning
+// its HTTP endpoints.
+type Module func(ctx context.Context, k sum.Key) ([]rocco.Endpoint, error)
+
+// Run bootstraps the kuang server with the given modules. It loads security
+// configuration from the environment, sets up mTLS, calls each module to
+// collect endpoints, and starts the HTTPS server with graceful shutdown.
+func Run(modules ...Module) error {
+	ctx := context.Background()
+
+	// Load configuration.
+	var secCfg config.Security
+	if err := fig.Load(&secCfg); err != nil {
+		return fmt.Errorf("load security config: %w", err)
+	}
+	var srvCfg serverConfig
+	if err := fig.Load(&srvCfg); err != nil {
+		return fmt.Errorf("load server config: %w", err)
+	}
+
+	// Bootstrap sctx authority from certificates.
+	authority, err := auth.New(ctx, secCfg)
+	if err != nil {
+		return fmt.Errorf("bootstrap auth: %w", err)
+	}
+
+	// Build TLS config for mTLS.
+	tlsCfg, err := auth.TLSConfig(secCfg)
+	if err != nil {
+		return fmt.Errorf("tls config: %w", err)
+	}
+
+	// Initialize sum service and registry.
+	svc := sum.New()
+	k := sum.Start()
+
+	// Run each module to collect endpoints.
+	var endpoints []rocco.Endpoint
+	for _, mod := range modules {
+		eps, err := mod(ctx, k)
+		if err != nil {
+			return fmt.Errorf("module: %w", err)
+		}
+		endpoints = append(endpoints, eps...)
+	}
+
+	// Configure the rocco engine with certificate-based authentication.
+	svc.Engine().WithAuthenticator(auth.Authenticator())
+	svc.Handle(endpoints...)
+	sum.Freeze(k)
+
+	// Register the /openapi endpoint on the router. This generates the
+	// OpenAPI spec filtered by the requesting agent's scopes.
+	engine := svc.Engine()
+	engine.Router().HandleFunc("GET /openapi", func(w http.ResponseWriter, r *http.Request) {
+		var id rocco.Identity
+		if identity := auth.IdentityFromContext(r.Context()); identity != nil {
+			id = identity
+		}
+		spec := engine.GenerateOpenAPI(id)
+		data, err := spec.ToJSON()
+		if err != nil {
+			http.Error(w, "failed to generate spec", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(data)
+	})
+
+	// Build the handler chain: Terminate middleware wraps the router to
+	// extract client certificates and inject identity into the context.
+	var handler http.Handler = engine.Router()
+	handler = auth.Terminate(authority)(handler)
+
+	addr := fmt.Sprintf("%s:%d", srvCfg.Host, srvCfg.Port)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		TLSConfig:         tlsCfg,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// Start server with graceful shutdown on SIGINT/SIGTERM.
+	errCh := make(chan error, 1)
+	go func() {
+		log.Printf("kuang: listening on %s", addr)
+		// Empty cert/key paths — TLS config already has the certificates.
+		errCh <- server.ListenAndServeTLS("", "")
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-sigCh:
+		log.Println("kuang: shutting down...")
+		shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		return server.Shutdown(shutdownCtx)
+	}
+}
+
+type serverConfig struct {
+	Host string `env:"KUANG_HOST" default:"localhost"`
+	Port int    `env:"KUANG_PORT" default:"8080"`
+}

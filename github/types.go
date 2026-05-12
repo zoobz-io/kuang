@@ -1,5 +1,4 @@
-// Package types defines request and response types for the kuang API boundary.
-package types //nolint:revive // intentional package name
+package github
 
 import "github.com/zoobz-io/check"
 
@@ -70,7 +69,7 @@ func (i IssueList) Validate() error { return nil }
 
 // CreateIssueRequest is the request body for creating an issue.
 type CreateIssueRequest struct {
-	Title string `json:"title" validate:"required"`
+	Title string `json:"title"`
 	Body  string `json:"body"`
 }
 
@@ -119,10 +118,10 @@ func (p PRList) Validate() error { return nil }
 
 // CreatePRRequest is the request body for creating a pull request.
 type CreatePRRequest struct {
-	Title string `json:"title" validate:"required"`
+	Title string `json:"title"`
 	Body  string `json:"body"`
-	Head  string `json:"head" validate:"required"`
-	Base  string `json:"base" validate:"required"`
+	Head  string `json:"head"`
+	Base  string `json:"base"`
 }
 
 // Validate validates a CreatePRRequest.
@@ -152,8 +151,8 @@ func (f FileContent) Validate() error {
 
 // CreateOrUpdateFileRequest is the request body for creating/updating a file.
 type CreateOrUpdateFileRequest struct {
-	Message string `json:"message" validate:"required"`
-	Content string `json:"content" validate:"required"`
+	Message string `json:"message"`
+	Content string `json:"content"`
 	SHA     string `json:"sha"`
 }
 
@@ -179,7 +178,6 @@ type SearchResult struct {
 func (s SearchResult) Validate() error { return nil }
 
 // CodeSearchResult is the response for code search.
-// GitHub returns items in the "items" field, but we expose as "results".
 type CodeSearchResult struct {
 	Results []SearchResult `json:"items"`
 }
