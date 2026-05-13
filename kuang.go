@@ -73,27 +73,11 @@ func Run(modules ...Module) error {
 	svc.Handle(endpoints...)
 	sum.Freeze(k)
 
-	// Register the /openapi endpoint on the router. This generates the
-	// OpenAPI spec filtered by the requesting agent's scopes.
-	engine := svc.Engine()
-	engine.Router().HandleFunc("GET /openapi", func(w http.ResponseWriter, r *http.Request) {
-		var id rocco.Identity
-		if identity := auth.IdentityFromContext(r.Context()); identity != nil {
-			id = identity
-		}
-		spec := engine.GenerateOpenAPI(id)
-		data, err := spec.ToJSON()
-		if err != nil {
-			http.Error(w, "failed to generate spec", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(data)
-	})
-
-	// Build the handler chain: Terminate middleware wraps the router to
+	// Build the handler chain. The openAPI interceptor serves a filtered
+	// spec based on the requesting agent's scopes (rocco's built-in
+	// /openapi serves an unfiltered spec). Terminate wraps everything to
 	// extract client certificates and inject identity into the context.
-	var handler http.Handler = engine.Router()
+	handler := openAPIInterceptor(svc.Engine())
 	handler = auth.Terminate(authority)(handler)
 
 	addr := fmt.Sprintf("%s:%d", srvCfg.Host, srvCfg.Port)
@@ -124,6 +108,32 @@ func Run(modules ...Module) error {
 		defer cancel()
 		return server.Shutdown(shutdownCtx)
 	}
+}
+
+// openAPIInterceptor wraps the rocco router to serve identity-filtered
+// OpenAPI specs at GET /openapi. Rocco's built-in /openapi handler serves
+// an unfiltered spec; this interceptor calls GenerateOpenAPI(identity) to
+// filter endpoints by the requesting agent's scopes.
+func openAPIInterceptor(engine *rocco.Engine) http.Handler {
+	router := engine.Router()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/openapi" {
+			var id rocco.Identity
+			if identity := auth.IdentityFromContext(r.Context()); identity != nil {
+				id = identity
+			}
+			spec := engine.GenerateOpenAPI(id)
+			data, err := spec.ToJSON()
+			if err != nil {
+				http.Error(w, "failed to generate spec", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(data)
+			return
+		}
+		router.ServeHTTP(w, r)
+	})
 }
 
 type serverConfig struct {
