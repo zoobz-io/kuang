@@ -137,7 +137,7 @@ func newMockGitHub(t *testing.T) *httptest.Server {
 
 	// --- Content ---
 	mux.HandleFunc("GET /repos/{owner}/{repo}/contents/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		filePath := r.PathValue("path...")
+		filePath := r.PathValue("path")
 		if filePath == "missing.txt" {
 			http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
 			return
@@ -153,7 +153,7 @@ func newMockGitHub(t *testing.T) *httptest.Server {
 	})
 
 	mux.HandleFunc("PUT /repos/{owner}/{repo}/contents/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		filePath := r.PathValue("path...")
+		filePath := r.PathValue("path")
 		var body map[string]string
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		writeJSON(w, map[string]any{
@@ -487,10 +487,6 @@ func TestPullRequests(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestContent(t *testing.T) {
-	// Skip until rocco fixes wildcard path param extraction.
-	// https://github.com/zoobz-io/rocco/issues/31
-	t.Skip("blocked on rocco#31: {path...} wildcard params fail extraction")
-
 	env, _ := setupGitHub(t)
 	agent := fullAccessAgent(t, env, github.Scopes())
 	names := mcpToolNames(t, agent)
@@ -512,7 +508,7 @@ func TestContent(t *testing.T) {
 
 	t.Run("get_file_with_ref", func(t *testing.T) {
 		tool := toolByName(t, names, "getFile")
-		text, isErr := mcpToolCall(t, agent, tool, `{"repo":"alpha","path":"README.md","ref":"v1.0"}`, 401)
+		text, isErr := mcpToolCall(t, agent, tool, `{"repo":"alpha","path...":"README.md","ref":"v1.0"}`, 401)
 		if isErr {
 			t.Fatalf("get file with ref failed: %s", text)
 		}
@@ -523,7 +519,7 @@ func TestContent(t *testing.T) {
 
 	t.Run("get_file_not_found", func(t *testing.T) {
 		tool := toolByName(t, names, "getFile")
-		_, isErr := mcpToolCall(t, agent, tool, `{"repo":"alpha","path":"missing.txt"}`, 402)
+		_, isErr := mcpToolCall(t, agent, tool, `{"repo":"alpha","path...":"missing.txt"}`, 402)
 		if !isErr {
 			t.Error("expected error for missing file")
 		}
@@ -531,7 +527,7 @@ func TestContent(t *testing.T) {
 
 	t.Run("create_or_update_file", func(t *testing.T) {
 		tool := toolByName(t, names, "createOrUpdateFile")
-		args := `{"repo":"alpha","path":"new-file.md","body":{"message":"Add file","content":"IyBIZWxsbw=="}}`
+		args := `{"repo":"alpha","path...":"new-file.md","body":{"message":"Add file","content":"IyBIZWxsbw=="}}`
 		text, isErr := mcpToolCall(t, agent, tool, args, 403)
 		if isErr {
 			t.Fatalf("create file failed: %s", text)
@@ -543,7 +539,7 @@ func TestContent(t *testing.T) {
 
 	t.Run("update_file_with_sha", func(t *testing.T) {
 		tool := toolByName(t, names, "createOrUpdateFile")
-		args := `{"repo":"alpha","path":"existing.md","body":{"message":"Update file","content":"dXBkYXRlZA==","sha":"oldsha123"}}`
+		args := `{"repo":"alpha","path...":"existing.md","body":{"message":"Update file","content":"dXBkYXRlZA==","sha":"oldsha123"}}`
 		text, isErr := mcpToolCall(t, agent, tool, args, 404)
 		if isErr {
 			t.Fatalf("update file failed: %s", text)

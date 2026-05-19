@@ -8,7 +8,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/zoobz-io/capitan v1.0.2
 	github.com/zoobz-io/fig v0.0.3
-	github.com/zoobz-io/rocco v0.1.21
+	github.com/zoobz-io/rocco v0.1.22
 	github.com/zoobz-io/sctx v1.0.3
 	github.com/zoobz-io/sum v0.0.12
 	go.opentelemetry.io/otel v1.38.0

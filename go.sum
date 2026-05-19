@@ -68,6 +68,8 @@ github.com/zoobz-io/openapi v1.0.2 h1:KWJmjt/EYTkyzTvNCEK6BXDRWV7J45LhRXqWWZjm2m
 github.com/zoobz-io/openapi v1.0.2/go.mod h1:B1AhdYd+dAtRRPIH8IQo2yjrvZbUdQAIhyrC+WhdrZA=
 github.com/zoobz-io/rocco v0.1.21 h1:rMotP96Zhlp7biqHUGwJ3Gl+g1R6FvtO+EElOqaf8C0=
 github.com/zoobz-io/rocco v0.1.21/go.mod h1:RkkWlhv/AWOb3cb/ywrjDobomzprt0R7lVtRH5WUkXE=
+github.com/zoobz-io/rocco v0.1.22 h1:N07pwZ8uW8vK9z7VyMB5KmIUWWZuGgvz7vPexgrSR98=
+github.com/zoobz-io/rocco v0.1.22/go.mod h1:RkkWlhv/AWOb3cb/ywrjDobomzprt0R7lVtRH5WUkXE=
 github.com/zoobz-io/scio v0.0.5 h1:fPDdnLIAUxhdzB0IycdbnI7j8V7is3KRRUiFzmahCeU=
 github.com/zoobz-io/scio v0.0.5/go.mod h1:zzwKhZ6DCbWq9gpUQC8b5GehZAjgcX/Aq39bjjxdNQE=
 github.com/zoobz-io/sctx v1.0.3 h1:dkv5F0PWDnjVOPpe+Vr0PwQ5uQrb/zcENSwv4FTR3rw=
