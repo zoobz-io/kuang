@@ -45,6 +45,19 @@ func WithTimeout(d time.Duration) Option {
 	return func(c *Client) { c.http.Timeout = d }
 }
 
+// RequestOption configures a single request, overriding client-level defaults.
+type RequestOption func(req *http.Request)
+
+// WithRequestHeader returns a RequestOption that sets a header on the request.
+func WithRequestHeader(key, value string) RequestOption {
+	return func(req *http.Request) { req.Header.Set(key, value) }
+}
+
+// WithRequestBearerToken returns a RequestOption that sets the Authorization header.
+func WithRequestBearerToken(token string) RequestOption {
+	return WithRequestHeader("Authorization", "Bearer "+token)
+}
+
 // New creates an instrumented HTTP client.
 func New(opts ...Option) *Client {
 	c := &Client{
@@ -71,32 +84,33 @@ func (r *Response) Decode(v any) error {
 }
 
 // Get performs a GET request.
-func (c *Client) Get(ctx context.Context, path string) (*Response, error) {
-	return c.Do(ctx, http.MethodGet, path, nil)
+func (c *Client) Get(ctx context.Context, path string, opts ...RequestOption) (*Response, error) {
+	return c.Do(ctx, http.MethodGet, path, nil, opts...)
 }
 
 // Post performs a POST request with a JSON body.
-func (c *Client) Post(ctx context.Context, path string, body any) (*Response, error) {
-	return c.Do(ctx, http.MethodPost, path, body)
+func (c *Client) Post(ctx context.Context, path string, body any, opts ...RequestOption) (*Response, error) {
+	return c.Do(ctx, http.MethodPost, path, body, opts...)
 }
 
 // Put performs a PUT request with a JSON body.
-func (c *Client) Put(ctx context.Context, path string, body any) (*Response, error) {
-	return c.Do(ctx, http.MethodPut, path, body)
+func (c *Client) Put(ctx context.Context, path string, body any, opts ...RequestOption) (*Response, error) {
+	return c.Do(ctx, http.MethodPut, path, body, opts...)
 }
 
 // Patch performs a PATCH request with a JSON body.
-func (c *Client) Patch(ctx context.Context, path string, body any) (*Response, error) {
-	return c.Do(ctx, http.MethodPatch, path, body)
+func (c *Client) Patch(ctx context.Context, path string, body any, opts ...RequestOption) (*Response, error) {
+	return c.Do(ctx, http.MethodPatch, path, body, opts...)
 }
 
 // Delete performs a DELETE request.
-func (c *Client) Delete(ctx context.Context, path string) (*Response, error) {
-	return c.Do(ctx, http.MethodDelete, path, nil)
+func (c *Client) Delete(ctx context.Context, path string, opts ...RequestOption) (*Response, error) {
+	return c.Do(ctx, http.MethodDelete, path, nil, opts...)
 }
 
-// Do performs an HTTP request with instrumentation.
-func (c *Client) Do(ctx context.Context, method, path string, body any) (*Response, error) {
+// Do performs an HTTP request with instrumentation. RequestOptions are applied
+// after client-level headers, allowing per-request overrides.
+func (c *Client) Do(ctx context.Context, method, path string, body any, opts ...RequestOption) (*Response, error) {
 	url := c.baseURL + path
 
 	var bodyReader io.Reader
@@ -115,6 +129,9 @@ func (c *Client) Do(ctx context.Context, method, path string, body any) (*Respon
 
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
+	}
+	for _, opt := range opts {
+		opt(req)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

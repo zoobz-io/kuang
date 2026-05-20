@@ -202,7 +202,6 @@ func setupGitHub(t *testing.T) (*kuang.TestEnv, *httptest.Server) {
 	mock := newMockGitHub(t)
 	env := kuang.NewTestEnv(t, github.Scopes(),
 		github.Module(github.Config{
-			Token:  "test-token",
 			APIURL: mock.URL,
 			Owner:  "testowner",
 		}),

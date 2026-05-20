@@ -17,7 +17,9 @@ import (
 	"github.com/zoobz-io/sum"
 
 	"github.com/zoobz-io/kuang/config"
+	"github.com/zoobz-io/kuang/contracts"
 	"github.com/zoobz-io/kuang/internal/auth"
+	"github.com/zoobz-io/kuang/internal/creds"
 )
 
 // Module is a function that registers services and returns endpoints.
@@ -54,12 +56,24 @@ func Run(modules ...Module) error {
 		return fmt.Errorf("tls config: %w", err)
 	}
 
+	// Open internal credential store.
+	store, err := creds.Open(srvCfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("open credential store: %w", err)
+	}
+	defer func() { _ = store.Close() }()
+
 	// Initialize sum service and registry.
 	svc := sum.New()
 	k := sum.Start()
 
+	// Register default credential store. Modules may override by
+	// registering their own contracts.Credentials — slush replaces
+	// silently on duplicate registration.
+	sum.Register[contracts.Credentials](k, store)
+	endpoints := []rocco.Endpoint{credsEndpoint()}
+
 	// Run each module to collect endpoints.
-	var endpoints []rocco.Endpoint
 	for _, mod := range modules {
 		eps, err := mod(ctx, k)
 		if err != nil {
@@ -137,6 +151,7 @@ func openAPIInterceptor(engine *rocco.Engine) http.Handler {
 }
 
 type serverConfig struct {
-	Host string `env:"KUANG_HOST" default:"localhost"`
-	Port int    `env:"KUANG_PORT" default:"8080"`
+	Host   string `env:"KUANG_HOST" default:"localhost"`
+	DBPath string `env:"KUANG_DB_PATH" default:"data/kuang.db"`
+	Port   int    `env:"KUANG_PORT" default:"8080"`
 }

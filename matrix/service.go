@@ -22,7 +22,6 @@ func newService(cfg Config) *service {
 	hs := strings.TrimRight(cfg.Homeserver, "/")
 	client := httpc.New(
 		httpc.WithBaseURL(hs),
-		httpc.WithBearerToken(cfg.AccessToken),
 	)
 	return &service{client: client, homeserver: hs}
 }
@@ -47,8 +46,8 @@ func escapePathParam(v string) string {
 
 // --- Identity ---
 
-func (s *service) WhoAmI(ctx context.Context) (Identity, error) {
-	resp, err := s.client.Get(ctx, "/_matrix/client/v3/account/whoami")
+func (s *service) WhoAmI(ctx context.Context, opts ...httpc.RequestOption) (Identity, error) {
+	resp, err := s.client.Get(ctx, "/_matrix/client/v3/account/whoami", opts...)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -61,7 +60,7 @@ func (s *service) WhoAmI(ctx context.Context) (Identity, error) {
 
 // --- Rooms ---
 
-func (s *service) CreateRoom(ctx context.Context, name, topic, alias string) (Room, error) {
+func (s *service) CreateRoom(ctx context.Context, name, topic, alias string, opts ...httpc.RequestOption) (Room, error) {
 	body := map[string]any{
 		"name":   name,
 		"preset": "private_chat",
@@ -73,7 +72,7 @@ func (s *service) CreateRoom(ctx context.Context, name, topic, alias string) (Ro
 		body["preset"] = "public_chat"
 		body["room_alias_name"] = alias
 	}
-	resp, err := s.client.Post(ctx, "/_matrix/client/v3/createRoom", body)
+	resp, err := s.client.Post(ctx, "/_matrix/client/v3/createRoom", body, opts...)
 	if err != nil {
 		return Room{}, err
 	}
@@ -84,8 +83,8 @@ func (s *service) CreateRoom(ctx context.Context, name, topic, alias string) (Ro
 	return room, nil
 }
 
-func (s *service) JoinedRooms(ctx context.Context) (RoomList, error) {
-	resp, err := s.client.Get(ctx, "/_matrix/client/v3/joined_rooms")
+func (s *service) JoinedRooms(ctx context.Context, opts ...httpc.RequestOption) (RoomList, error) {
+	resp, err := s.client.Get(ctx, "/_matrix/client/v3/joined_rooms", opts...)
 	if err != nil {
 		return RoomList{}, err
 	}
@@ -98,7 +97,7 @@ func (s *service) JoinedRooms(ctx context.Context) (RoomList, error) {
 	rooms := make([]RoomInfo, 0, len(joined.Rooms))
 	for _, roomID := range joined.Rooms {
 		info := RoomInfo{RoomID: roomID}
-		if ri, err := s.getRoomInfo(ctx, roomID); err == nil {
+		if ri, err := s.getRoomInfo(ctx, roomID, opts...); err == nil {
 			info.Name = ri.Name
 			info.Topic = ri.Topic
 		}
@@ -107,12 +106,12 @@ func (s *service) JoinedRooms(ctx context.Context) (RoomList, error) {
 	return RoomList{Rooms: rooms}, nil
 }
 
-func (s *service) getRoomInfo(ctx context.Context, roomID string) (RoomInfo, error) {
+func (s *service) getRoomInfo(ctx context.Context, roomID string, opts ...httpc.RequestOption) (RoomInfo, error) {
 	var info RoomInfo
 	var nameEvent struct {
 		Name string `json:"name"`
 	}
-	if resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/state/m.room.name", escapePathParam(roomID))); err == nil {
+	if resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/state/m.room.name", escapePathParam(roomID)), opts...); err == nil {
 		if err := resp.Decode(&nameEvent); err == nil {
 			info.Name = nameEvent.Name
 		}
@@ -120,7 +119,7 @@ func (s *service) getRoomInfo(ctx context.Context, roomID string) (RoomInfo, err
 	var topicEvent struct {
 		Topic string `json:"topic"`
 	}
-	if resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/state/m.room.topic", escapePathParam(roomID))); err == nil {
+	if resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/state/m.room.topic", escapePathParam(roomID)), opts...); err == nil {
 		if err := resp.Decode(&topicEvent); err == nil {
 			info.Topic = topicEvent.Topic
 		}
@@ -128,12 +127,12 @@ func (s *service) getRoomInfo(ctx context.Context, roomID string) (RoomInfo, err
 	return info, nil
 }
 
-func (s *service) Join(ctx context.Context, roomIDOrAlias string) (Room, error) {
-	resolved, err := s.resolveRoom(ctx, roomIDOrAlias)
+func (s *service) Join(ctx context.Context, roomIDOrAlias string, opts ...httpc.RequestOption) (Room, error) {
+	resolved, err := s.resolveRoom(ctx, roomIDOrAlias, opts...)
 	if err != nil {
 		return Room{}, err
 	}
-	resp, err := s.client.Post(ctx, fmt.Sprintf("/_matrix/client/v3/join/%s", escapePathParam(resolved)), map[string]any{})
+	resp, err := s.client.Post(ctx, fmt.Sprintf("/_matrix/client/v3/join/%s", escapePathParam(resolved)), map[string]any{}, opts...)
 	if err != nil {
 		return Room{}, err
 	}
@@ -144,12 +143,12 @@ func (s *service) Join(ctx context.Context, roomIDOrAlias string) (Room, error) 
 	return room, nil
 }
 
-func (s *service) Leave(ctx context.Context, roomID string) error {
-	_, err := s.client.Post(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/leave", escapePathParam(roomID)), map[string]any{})
+func (s *service) Leave(ctx context.Context, roomID string, opts ...httpc.RequestOption) error {
+	_, err := s.client.Post(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/leave", escapePathParam(roomID)), map[string]any{}, opts...)
 	return err
 }
 
-func (s *service) resolveRoom(ctx context.Context, roomIDOrAlias string) (string, error) {
+func (s *service) resolveRoom(ctx context.Context, roomIDOrAlias string, opts ...httpc.RequestOption) (string, error) {
 	if strings.HasPrefix(roomIDOrAlias, "!") {
 		return roomIDOrAlias, nil
 	}
@@ -157,7 +156,7 @@ func (s *service) resolveRoom(ctx context.Context, roomIDOrAlias string) (string
 	if !strings.HasPrefix(alias, "#") {
 		alias = "#" + alias + ":" + s.serverName()
 	}
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/directory/room/%s", escapePathParam(alias)))
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/directory/room/%s", escapePathParam(alias)), opts...)
 	if err != nil {
 		return "", fmt.Errorf("resolving %q: %w", alias, err)
 	}
@@ -172,8 +171,8 @@ func (s *service) resolveRoom(ctx context.Context, roomIDOrAlias string) (string
 
 // --- Members ---
 
-func (s *service) Members(ctx context.Context, roomID string) (MemberList, error) {
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/joined_members", escapePathParam(roomID)))
+func (s *service) Members(ctx context.Context, roomID string, opts ...httpc.RequestOption) (MemberList, error) {
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/joined_members", escapePathParam(roomID)), opts...)
 	if err != nil {
 		return MemberList{}, err
 	}
@@ -197,14 +196,14 @@ func (s *service) Members(ctx context.Context, roomID string) (MemberList, error
 
 // --- Messages ---
 
-func (s *service) Send(ctx context.Context, roomID, message string) (SendMessageResponse, error) {
+func (s *service) Send(ctx context.Context, roomID, message string, opts ...httpc.RequestOption) (SendMessageResponse, error) {
 	txnID := fmt.Sprintf("%d", time.Now().UnixNano())
 	body := map[string]any{
 		"msgtype": "m.text",
 		"body":    message,
 	}
 	path := fmt.Sprintf("/_matrix/client/v3/rooms/%s/send/m.room.message/%s", escapePathParam(roomID), txnID)
-	resp, err := s.client.Put(ctx, path, body)
+	resp, err := s.client.Put(ctx, path, body, opts...)
 	if err != nil {
 		return SendMessageResponse{}, err
 	}
@@ -215,18 +214,18 @@ func (s *service) Send(ctx context.Context, roomID, message string) (SendMessage
 	return result, nil
 }
 
-func (s *service) ReadMessages(ctx context.Context, roomID string, limit int, from string) (MessageList, error) {
+func (s *service) ReadMessages(ctx context.Context, roomID string, limit int, from string, opts ...httpc.RequestOption) (MessageList, error) {
 	path := fmt.Sprintf("/_matrix/client/v3/rooms/%s/messages?dir=b&limit=%d", escapePathParam(roomID), limit)
-	return s.decodeMessages(ctx, path, from, true)
+	return s.decodeMessages(ctx, path, from, true, opts...)
 }
 
 // ReadMessagesSince retrieves messages after a given event ID. This is used
 // by agents to catch up on messages they haven't seen yet.
-func (s *service) ReadMessagesSince(ctx context.Context, roomID, eventID string, limit int, from string) (MessageList, error) {
+func (s *service) ReadMessagesSince(ctx context.Context, roomID, eventID string, limit int, from string, opts ...httpc.RequestOption) (MessageList, error) {
 	// Resolve the event ID to a pagination token.
 	ctxPath := fmt.Sprintf("/_matrix/client/v3/rooms/%s/context/%s?limit=0",
 		escapePathParam(roomID), escapePathParam(eventID))
-	resp, err := s.client.Get(ctx, ctxPath)
+	resp, err := s.client.Get(ctx, ctxPath, opts...)
 	if err != nil {
 		return MessageList{}, fmt.Errorf("resolving event %s: %w", eventID, err)
 	}
@@ -239,7 +238,7 @@ func (s *service) ReadMessagesSince(ctx context.Context, roomID, eventID string,
 	// Read forward from that point (chronological order).
 	path := fmt.Sprintf("/_matrix/client/v3/rooms/%s/messages?dir=f&from=%s&limit=%d",
 		escapePathParam(roomID), url.QueryEscape(ctxResp.End), limit)
-	return s.decodeMessages(ctx, path, from, false)
+	return s.decodeMessages(ctx, path, from, false, opts...)
 }
 
 // senderMatches checks if a message sender contains the filter string.
@@ -247,8 +246,8 @@ func senderMatches(sender, filter string) bool {
 	return strings.Contains(sender, filter)
 }
 
-func (s *service) decodeMessages(ctx context.Context, path, from string, reverse bool) (MessageList, error) {
-	resp, err := s.client.Get(ctx, path)
+func (s *service) decodeMessages(ctx context.Context, path, from string, reverse bool, opts ...httpc.RequestOption) (MessageList, error) {
+	resp, err := s.client.Get(ctx, path, opts...)
 	if err != nil {
 		return MessageList{}, err
 	}
@@ -304,15 +303,15 @@ func extractMessage(e rawEvent, from string) (Message, bool) {
 
 // --- Invites ---
 
-func (s *service) Invite(ctx context.Context, roomID, userID string) error {
+func (s *service) Invite(ctx context.Context, roomID, userID string, opts ...httpc.RequestOption) error {
 	_, err := s.client.Post(ctx, fmt.Sprintf("/_matrix/client/v3/rooms/%s/invite", escapePathParam(roomID)), map[string]any{
 		"user_id": userID,
-	})
+	}, opts...)
 	return err
 }
 
-func (s *service) ListInvites(ctx context.Context) (InviteList, error) {
-	resp, err := s.sync(ctx, "", 0, "")
+func (s *service) ListInvites(ctx context.Context, opts ...httpc.RequestOption) (InviteList, error) {
+	resp, err := s.sync(ctx, "", 0, "", opts...)
 	if err != nil {
 		return InviteList{}, err
 	}
@@ -321,51 +320,51 @@ func (s *service) ListInvites(ctx context.Context) (InviteList, error) {
 
 // --- DMs ---
 
-func (s *service) DMSend(ctx context.Context, userID, message string) (SendMessageResponse, error) {
-	roomID, err := s.ensureDMRoom(ctx, userID)
+func (s *service) DMSend(ctx context.Context, userID, message string, opts ...httpc.RequestOption) (SendMessageResponse, error) {
+	roomID, err := s.ensureDMRoom(ctx, userID, opts...)
 	if err != nil {
 		return SendMessageResponse{}, err
 	}
-	return s.Send(ctx, roomID, message)
+	return s.Send(ctx, roomID, message, opts...)
 }
 
-func (s *service) DMRead(ctx context.Context, userID string, limit int) (MessageList, error) {
-	roomID, err := s.findDMRoom(ctx, userID)
+func (s *service) DMRead(ctx context.Context, userID string, limit int, opts ...httpc.RequestOption) (MessageList, error) {
+	roomID, err := s.findDMRoom(ctx, userID, opts...)
 	if err != nil {
 		return MessageList{}, err
 	}
-	return s.ReadMessages(ctx, roomID, limit, "")
+	return s.ReadMessages(ctx, roomID, limit, "", opts...)
 }
 
-func (s *service) ensureDMRoom(ctx context.Context, targetID string) (string, error) {
-	me, err := s.WhoAmI(ctx)
+func (s *service) ensureDMRoom(ctx context.Context, targetID string, opts ...httpc.RequestOption) (string, error) {
+	me, err := s.WhoAmI(ctx, opts...)
 	if err != nil {
 		return "", fmt.Errorf("getting identity: %w", err)
 	}
-	directs, err := s.getDirectRooms(ctx, me.UserID)
+	directs, err := s.getDirectRooms(ctx, me.UserID, opts...)
 	if err != nil {
 		return "", err
 	}
 	if rooms, ok := directs[targetID]; ok && len(rooms) > 0 {
 		return rooms[0], nil
 	}
-	room, err := s.createDMRoom(ctx, targetID)
+	room, err := s.createDMRoom(ctx, targetID, opts...)
 	if err != nil {
 		return "", err
 	}
 	directs[targetID] = []string{room.RoomID}
-	if err := s.setDirectRooms(ctx, me.UserID, directs); err != nil {
+	if err := s.setDirectRooms(ctx, me.UserID, directs, opts...); err != nil {
 		return "", err
 	}
 	return room.RoomID, nil
 }
 
-func (s *service) findDMRoom(ctx context.Context, targetID string) (string, error) {
-	me, err := s.WhoAmI(ctx)
+func (s *service) findDMRoom(ctx context.Context, targetID string, opts ...httpc.RequestOption) (string, error) {
+	me, err := s.WhoAmI(ctx, opts...)
 	if err != nil {
 		return "", fmt.Errorf("getting identity: %w", err)
 	}
-	directs, err := s.getDirectRooms(ctx, me.UserID)
+	directs, err := s.getDirectRooms(ctx, me.UserID, opts...)
 	if err != nil {
 		return "", err
 	}
@@ -376,12 +375,12 @@ func (s *service) findDMRoom(ctx context.Context, targetID string) (string, erro
 	return rooms[0], nil
 }
 
-func (s *service) createDMRoom(ctx context.Context, invite string) (Room, error) {
+func (s *service) createDMRoom(ctx context.Context, invite string, opts ...httpc.RequestOption) (Room, error) {
 	resp, err := s.client.Post(ctx, "/_matrix/client/v3/createRoom", map[string]any{
 		"preset":    "trusted_private_chat",
 		"is_direct": true,
 		"invite":    []string{invite},
-	})
+	}, opts...)
 	if err != nil {
 		return Room{}, err
 	}
@@ -392,9 +391,9 @@ func (s *service) createDMRoom(ctx context.Context, invite string) (Room, error)
 	return room, nil
 }
 
-func (s *service) getDirectRooms(ctx context.Context, userID string) (map[string][]string, error) {
+func (s *service) getDirectRooms(ctx context.Context, userID string, opts ...httpc.RequestOption) (map[string][]string, error) {
 	path := fmt.Sprintf("/_matrix/client/v3/user/%s/account_data/m.direct", escapePathParam(userID))
-	resp, err := s.client.Get(ctx, path)
+	resp, err := s.client.Get(ctx, path, opts...)
 	if err != nil {
 		return map[string][]string{}, nil
 	}
@@ -405,9 +404,9 @@ func (s *service) getDirectRooms(ctx context.Context, userID string) (map[string
 	return directs, nil
 }
 
-func (s *service) setDirectRooms(ctx context.Context, userID string, rooms map[string][]string) error {
+func (s *service) setDirectRooms(ctx context.Context, userID string, rooms map[string][]string, opts ...httpc.RequestOption) error {
 	path := fmt.Sprintf("/_matrix/client/v3/user/%s/account_data/m.direct", escapePathParam(userID))
-	_, err := s.client.Put(ctx, path, rooms)
+	_, err := s.client.Put(ctx, path, rooms, opts...)
 	return err
 }
 
@@ -418,10 +417,10 @@ func (s *service) setDirectRooms(ctx context.Context, userID string, rooms map[s
 // the next_batch token from a previous sync — pass empty string for initial
 // sync. The timeout controls how long the Matrix server holds the connection
 // open waiting for events (in seconds).
-func (s *service) Watch(ctx context.Context, since string, timeout int) (WatchResponse, error) {
+func (s *service) Watch(ctx context.Context, since string, timeout int, opts ...httpc.RequestOption) (WatchResponse, error) {
 	// Initial sync to establish position if no since token.
 	if since == "" {
-		resp, err := s.sync(ctx, "", 0, "")
+		resp, err := s.sync(ctx, "", 0, "", opts...)
 		if err != nil {
 			return WatchResponse{}, fmt.Errorf("initial sync: %w", err)
 		}
@@ -429,7 +428,7 @@ func (s *service) Watch(ctx context.Context, since string, timeout int) (WatchRe
 	}
 
 	// Long-poll for new events.
-	resp, err := s.sync(ctx, since, timeout, "")
+	resp, err := s.sync(ctx, since, timeout, "", opts...)
 	if err != nil {
 		return WatchResponse{}, err
 	}
@@ -439,7 +438,7 @@ func (s *service) Watch(ctx context.Context, since string, timeout int) (WatchRe
 	// Collect messages from joined rooms.
 	for roomID, room := range resp.Rooms.Join {
 		roomName := roomID
-		if info, infoErr := s.getRoomInfo(ctx, roomID); infoErr == nil && info.Name != "" {
+		if info, infoErr := s.getRoomInfo(ctx, roomID, opts...); infoErr == nil && info.Name != "" {
 			roomName = info.Name
 		}
 		for _, ev := range room.Timeline.Events {
@@ -484,7 +483,7 @@ func (s *service) Watch(ctx context.Context, since string, timeout int) (WatchRe
 }
 
 // sync performs a raw Matrix sync request.
-func (s *service) sync(ctx context.Context, since string, timeout int, roomID string) (*syncResponse, error) {
+func (s *service) sync(ctx context.Context, since string, timeout int, roomID string, opts ...httpc.RequestOption) (*syncResponse, error) {
 	q := url.Values{}
 	q.Set("timeout", fmt.Sprintf("%d", timeout*1000))
 	if since != "" {
@@ -495,7 +494,7 @@ func (s *service) sync(ctx context.Context, since string, timeout int, roomID st
 		q.Set("filter", filter)
 	}
 	path := "/_matrix/client/v3/sync?" + q.Encode()
-	resp, err := s.client.Get(ctx, path)
+	resp, err := s.client.Get(ctx, path, opts...)
 	if err != nil {
 		return nil, err
 	}

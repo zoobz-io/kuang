@@ -5,17 +5,13 @@ import "errors"
 
 // Config holds Matrix homeserver settings.
 type Config struct {
-	Homeserver  string
-	AccessToken string
+	Homeserver string
 }
 
 // Validate checks that required fields are set.
 func (c Config) Validate() error {
 	if c.Homeserver == "" {
 		return errors.New("matrix: homeserver is required")
-	}
-	if c.AccessToken == "" {
-		return errors.New("matrix: access_token is required")
 	}
 	return nil
 }

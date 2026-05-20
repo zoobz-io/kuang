@@ -22,7 +22,6 @@ func newService(cfg Config) *service {
 	}
 	client := httpc.New(
 		httpc.WithBaseURL(apiURL),
-		httpc.WithBearerToken(cfg.Token),
 		httpc.WithHeader("Accept", "application/vnd.github+json"),
 		httpc.WithHeader("X-GitHub-Api-Version", "2022-11-28"),
 	)
@@ -31,8 +30,8 @@ func newService(cfg Config) *service {
 
 // --- Repos ---
 
-func (s *service) ListRepos(ctx context.Context) (RepoList, error) {
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/users/%s/repos", s.owner))
+func (s *service) ListRepos(ctx context.Context, opts ...httpc.RequestOption) (RepoList, error) {
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/users/%s/repos", s.owner), opts...)
 	if err != nil {
 		return RepoList{}, err
 	}
@@ -43,8 +42,8 @@ func (s *service) ListRepos(ctx context.Context) (RepoList, error) {
 	return RepoList{Repos: repos}, nil
 }
 
-func (s *service) GetRepo(ctx context.Context, name string) (Repo, error) {
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s", s.owner, name))
+func (s *service) GetRepo(ctx context.Context, name string, opts ...httpc.RequestOption) (Repo, error) {
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s", s.owner, name), opts...)
 	if err != nil {
 		return Repo{}, err
 	}
@@ -57,8 +56,8 @@ func (s *service) GetRepo(ctx context.Context, name string) (Repo, error) {
 
 // --- Issues ---
 
-func (s *service) ListIssues(ctx context.Context, repo string) (IssueList, error) {
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/issues", s.owner, repo))
+func (s *service) ListIssues(ctx context.Context, repo string, opts ...httpc.RequestOption) (IssueList, error) {
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/issues", s.owner, repo), opts...)
 	if err != nil {
 		return IssueList{}, err
 	}
@@ -69,8 +68,8 @@ func (s *service) ListIssues(ctx context.Context, repo string) (IssueList, error
 	return IssueList{Issues: issues}, nil
 }
 
-func (s *service) GetIssue(ctx context.Context, repo string, number int) (Issue, error) {
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/issues/%d", s.owner, repo, number))
+func (s *service) GetIssue(ctx context.Context, repo string, number int, opts ...httpc.RequestOption) (Issue, error) {
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/issues/%d", s.owner, repo, number), opts...)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -81,11 +80,11 @@ func (s *service) GetIssue(ctx context.Context, repo string, number int) (Issue,
 	return issue, nil
 }
 
-func (s *service) CreateIssue(ctx context.Context, repo, title, body string) (Issue, error) {
+func (s *service) CreateIssue(ctx context.Context, repo, title, body string, opts ...httpc.RequestOption) (Issue, error) {
 	resp, err := s.client.Post(ctx, fmt.Sprintf("/repos/%s/%s/issues", s.owner, repo), map[string]string{
 		"title": title,
 		"body":  body,
-	})
+	}, opts...)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -98,8 +97,8 @@ func (s *service) CreateIssue(ctx context.Context, repo, title, body string) (Is
 
 // --- Pull Requests ---
 
-func (s *service) ListPRs(ctx context.Context, repo string) (PRList, error) {
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/pulls", s.owner, repo))
+func (s *service) ListPRs(ctx context.Context, repo string, opts ...httpc.RequestOption) (PRList, error) {
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/pulls", s.owner, repo), opts...)
 	if err != nil {
 		return PRList{}, err
 	}
@@ -110,8 +109,8 @@ func (s *service) ListPRs(ctx context.Context, repo string) (PRList, error) {
 	return PRList{PullRequests: prs}, nil
 }
 
-func (s *service) GetPR(ctx context.Context, repo string, number int) (PullRequest, error) {
-	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/pulls/%d", s.owner, repo, number))
+func (s *service) GetPR(ctx context.Context, repo string, number int, opts ...httpc.RequestOption) (PullRequest, error) {
+	resp, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/pulls/%d", s.owner, repo, number), opts...)
 	if err != nil {
 		return PullRequest{}, err
 	}
@@ -122,13 +121,13 @@ func (s *service) GetPR(ctx context.Context, repo string, number int) (PullReque
 	return pr, nil
 }
 
-func (s *service) CreatePR(ctx context.Context, repo, title, body, head, base string) (PullRequest, error) {
+func (s *service) CreatePR(ctx context.Context, repo, title, body, head, base string, opts ...httpc.RequestOption) (PullRequest, error) {
 	resp, err := s.client.Post(ctx, fmt.Sprintf("/repos/%s/%s/pulls", s.owner, repo), map[string]string{
 		"title": title,
 		"body":  body,
 		"head":  head,
 		"base":  base,
-	})
+	}, opts...)
 	if err != nil {
 		return PullRequest{}, err
 	}
@@ -141,12 +140,12 @@ func (s *service) CreatePR(ctx context.Context, repo, title, body, head, base st
 
 // --- Content ---
 
-func (s *service) GetFile(ctx context.Context, repo, path, ref string) (FileContent, error) {
+func (s *service) GetFile(ctx context.Context, repo, path, ref string, opts ...httpc.RequestOption) (FileContent, error) {
 	url := fmt.Sprintf("/repos/%s/%s/contents/%s", s.owner, repo, path)
 	if ref != "" {
 		url += "?ref=" + ref
 	}
-	resp, err := s.client.Get(ctx, url)
+	resp, err := s.client.Get(ctx, url, opts...)
 	if err != nil {
 		return FileContent{}, err
 	}
@@ -157,7 +156,7 @@ func (s *service) GetFile(ctx context.Context, repo, path, ref string) (FileCont
 	return fc, nil
 }
 
-func (s *service) CreateOrUpdateFile(ctx context.Context, repo, path, message, content, sha string) (FileContent, error) {
+func (s *service) CreateOrUpdateFile(ctx context.Context, repo, path, message, content, sha string, opts ...httpc.RequestOption) (FileContent, error) {
 	body := map[string]string{
 		"message": message,
 		"content": content,
@@ -165,7 +164,7 @@ func (s *service) CreateOrUpdateFile(ctx context.Context, repo, path, message, c
 	if sha != "" {
 		body["sha"] = sha
 	}
-	resp, err := s.client.Put(ctx, fmt.Sprintf("/repos/%s/%s/contents/%s", s.owner, repo, path), body)
+	resp, err := s.client.Put(ctx, fmt.Sprintf("/repos/%s/%s/contents/%s", s.owner, repo, path), body, opts...)
 	if err != nil {
 		return FileContent{}, err
 	}
@@ -178,8 +177,8 @@ func (s *service) CreateOrUpdateFile(ctx context.Context, repo, path, message, c
 
 // --- Search ---
 
-func (s *service) SearchCode(ctx context.Context, query string) (CodeSearchResult, error) {
-	resp, err := s.client.Get(ctx, "/search/code?q="+query)
+func (s *service) SearchCode(ctx context.Context, query string, opts ...httpc.RequestOption) (CodeSearchResult, error) {
+	resp, err := s.client.Get(ctx, "/search/code?q="+query, opts...)
 	if err != nil {
 		return CodeSearchResult{}, err
 	}

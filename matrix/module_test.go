@@ -4,8 +4,7 @@ import "testing"
 
 func TestModuleFactoryValidConfig(t *testing.T) {
 	cfg := Config{
-		Homeserver:  "https://matrix.example.com",
-		AccessToken: "syt_test_token",
+		Homeserver: "https://matrix.example.com",
 	}
 	mod := Module(cfg)
 	if mod == nil {

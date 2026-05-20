@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/zoobz-io/sum"
 
 	"github.com/zoobz-io/kuang/config"
+	"github.com/zoobz-io/kuang/contracts"
 	"github.com/zoobz-io/kuang/internal/auth"
 )
 
@@ -41,6 +43,38 @@ type TestEnv struct {
 	caKey  ed25519.PrivateKey
 	caCert *x509.Certificate
 	serial int64
+	creds  *memCredentials
+}
+
+// SetCredential provisions a credential for a test agent.
+func (e *TestEnv) SetCredential(agent, key, value string) {
+	e.creds.set(agent, key, value)
+}
+
+// memCredentials is an in-memory contracts.Credentials for testing.
+type memCredentials struct {
+	mu    sync.RWMutex
+	store map[string]string // "agent:key" → value
+}
+
+func newMemCredentials() *memCredentials {
+	return &memCredentials{store: make(map[string]string)}
+}
+
+func (m *memCredentials) set(agent, key, value string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.store[agent+":"+key] = value
+}
+
+func (m *memCredentials) Resolve(_ context.Context, agent string, key string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.store[agent+":"+key]
+	if !ok {
+		return "", fmt.Errorf("credential %q not found for agent %q", key, agent)
+	}
+	return v, nil
 }
 
 // NewTestEnv boots a kuang server with the given modules for integration
@@ -130,7 +164,11 @@ func NewTestEnv(t *testing.T, scopes []string, modules ...Module) *TestEnv {
 	svc := sum.New()
 	k := sum.Start()
 
-	var endpoints []rocco.Endpoint
+	// Register test credential store.
+	env.creds = newMemCredentials()
+	sum.Register[contracts.Credentials](k, env.creds)
+	endpoints := []rocco.Endpoint{credsEndpoint()}
+
 	for _, mod := range modules {
 		eps, err := mod(ctx, k)
 		if err != nil {

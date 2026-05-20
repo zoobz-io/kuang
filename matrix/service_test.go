@@ -795,8 +795,7 @@ func TestWatchSkipsNonMessageEvents(t *testing.T) {
 
 func TestNewService(t *testing.T) {
 	svc := newService(Config{
-		Homeserver:  "https://matrix.example.com/",
-		AccessToken: "syt_test",
+		Homeserver: "https://matrix.example.com/",
 	})
 	if svc.homeserver != "https://matrix.example.com" {
 		t.Errorf("homeserver = %q, want trailing slash trimmed", svc.homeserver)
