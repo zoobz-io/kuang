@@ -4,6 +4,7 @@ toolchain go1.25.3
 
 use (
 	.
+	./admin
 	./github
 	./testing/integration
 	./matrix

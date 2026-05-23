@@ -18,6 +18,10 @@ build: ## Build the application binary
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/$(APP_NAME) ./cmd/app
 
+build-admin: ## Build the admin binary
+	@mkdir -p $(BIN_DIR)
+	@cd admin && go build -o ../$(BIN_DIR)/admin ./cmd/admin
+
 run: ## Run the application locally
 	@go run ./cmd/app
 
