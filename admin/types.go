@@ -29,6 +29,32 @@ func (r CredentialResponse) Validate() error {
 	).Err()
 }
 
+// SetupRequest is the body for POST /setup.
+type SetupRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// Validate validates a SetupRequest.
+func (r SetupRequest) Validate() error {
+	return check.All(
+		check.Str(r.Username, "username").Required().V(),
+		check.Str(r.Password, "password").Required().MinLen(8).V(),
+	).Err()
+}
+
+// SetupResponse is returned after successful first-time setup.
+type SetupResponse struct {
+	Username string `json:"username"`
+}
+
+// Validate validates a SetupResponse.
+func (r SetupResponse) Validate() error {
+	return check.Check[SetupResponse](
+		check.Str(r.Username, "username").Required().V(),
+	).Err()
+}
+
 // CredentialKeyList is returned when listing credential keys for an agent.
 type CredentialKeyList struct {
 	Agent string   `json:"agent"`

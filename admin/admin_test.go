@@ -3,6 +3,8 @@
 package admin
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,29 +14,50 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/zoobz-io/kuang/internal/auth"
 	"github.com/zoobz-io/kuang/internal/creds"
+	"github.com/zoobz-io/rocco"
 	"github.com/zoobz-io/sum"
 )
 
-const testAPIKey = "test-key-12345"
+const (
+	testUsername = "admin"
+	testPassword = "test-password-12345"
+)
 
 func setupTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 	sum.Reset()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
+
 	store, err := creds.Open(dbPath)
 	if err != nil {
 		t.Fatalf("open test store: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return NewHandler(store, testAPIKey)
+
+	userStore, err := auth.OpenStore(dbPath)
+	if err != nil {
+		t.Fatalf("open user store: %v", err)
+	}
+	t.Cleanup(func() { _ = userStore.Close() })
+
+	if err := userStore.Create(t.Context(), testUsername, testPassword); err != nil {
+		t.Fatalf("create test user: %v", err)
+	}
+
+	return NewHandler(store, LocalAuthenticator(userStore), userStore)
+}
+
+func basicAuth(username, password string) string {
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
 }
 
 func authHeader() string {
-	return "Bearer " + testAPIKey
+	return basicAuth(testUsername, testPassword)
 }
 
-// --- Auth middleware tests ---
+// --- Auth tests ---
 
 func TestAuthenticateRejectsNoHeader(t *testing.T) {
 	handler := setupTestHandler(t)
@@ -42,24 +65,24 @@ func TestAuthenticateRejectsNoHeader(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", w.Code)
 	}
 }
 
-func TestAuthenticateRejectsWrongKey(t *testing.T) {
+func TestAuthenticateRejectsWrongPassword(t *testing.T) {
 	handler := setupTestHandler(t)
 	req := httptest.NewRequest("GET", "/credentials/agent-1", nil)
-	req.Header.Set("Authorization", "Bearer wrong-key")
+	req.Header.Set("Authorization", basicAuth(testUsername, "wrong-password"))
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", w.Code)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", w.Code)
 	}
 }
 
-func TestAuthenticateAcceptsValidKey(t *testing.T) {
+func TestAuthenticateAcceptsValidCredentials(t *testing.T) {
 	handler := setupTestHandler(t)
 	req := httptest.NewRequest("GET", "/credentials/agent-1", nil)
 	req.Header.Set("Authorization", authHeader())
@@ -74,10 +97,10 @@ func TestAuthenticateAcceptsValidKey(t *testing.T) {
 // --- AdminIdentity tests ---
 
 func TestAdminIdentity(t *testing.T) {
-	id := &AdminIdentity{}
+	id := &AdminIdentity{username: "testuser", scopes: []string{"admin"}}
 
-	if id.ID() != "admin" {
-		t.Errorf("ID() = %q, want admin", id.ID())
+	if id.ID() != "testuser" {
+		t.Errorf("ID() = %q, want testuser", id.ID())
 	}
 	if id.TenantID() != "admin" {
 		t.Errorf("TenantID() = %q, want admin", id.TenantID())
@@ -91,14 +114,60 @@ func TestAdminIdentity(t *testing.T) {
 	if id.Roles() != nil {
 		t.Error("Roles() should be nil")
 	}
-	if !id.HasScope("anything") {
-		t.Error("HasScope should always return true")
+	if !id.HasScope("admin") {
+		t.Error("HasScope(admin) should return true")
+	}
+	if id.HasScope("other") {
+		t.Error("HasScope(other) should return false")
 	}
 	if id.HasRole("admin") {
 		t.Error("HasRole should always return false")
 	}
 	if id.Stats() != nil {
 		t.Error("Stats() should be nil")
+	}
+}
+
+// --- Custom authenticator test ---
+
+func TestCustomAuthenticator(t *testing.T) {
+	sum.Reset()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	store, err := creds.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open test store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	// Custom authenticator that accepts a Bearer token.
+	custom := func(_ context.Context, r *http.Request) (rocco.Identity, error) {
+		if r.Header.Get("Authorization") == "Bearer magic-token" {
+			return &AdminIdentity{username: "custom-user", scopes: []string{ScopeAdmin}}, nil
+		}
+		return rocco.NoIdentity{}, nil
+	}
+
+	handler := NewHandler(store, custom, nil)
+
+	// Valid token works.
+	req := httptest.NewRequest("GET", "/credentials/agent-1", nil)
+	req.Header.Set("Authorization", "Bearer magic-token")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+
+	// Invalid token rejected.
+	req = httptest.NewRequest("GET", "/credentials/agent-1", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", w.Code)
 	}
 }
 
@@ -230,5 +299,146 @@ func TestGetCredentialNotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
+// --- Setup endpoint tests ---
+
+func setupEmptyHandler(t *testing.T) (http.Handler, *auth.Store) {
+	t.Helper()
+	sum.Reset()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	store, err := creds.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open test store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	userStore, err := auth.OpenStore(dbPath)
+	if err != nil {
+		t.Fatalf("open user store: %v", err)
+	}
+	t.Cleanup(func() { _ = userStore.Close() })
+
+	handler := NewHandler(store, LocalAuthenticator(userStore), userStore)
+	return handler, userStore
+}
+
+func TestSetupCreatesFirstUser(t *testing.T) {
+	handler, _ := setupEmptyHandler(t)
+
+	body := `{"username":"myadmin","password":"secure-password-123"}`
+	req := httptest.NewRequest("POST", "/setup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("setup status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp SetupResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode setup response: %v", err)
+	}
+	if resp.Username != "myadmin" {
+		t.Errorf("username = %q, want myadmin", resp.Username)
+	}
+
+	// Auth works with the created user.
+	req = httptest.NewRequest("GET", "/credentials/agent-1", nil)
+	req.Header.Set("Authorization", basicAuth("myadmin", "secure-password-123"))
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("auth after setup status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSetupRejectsSecondCall(t *testing.T) {
+	handler, _ := setupEmptyHandler(t)
+
+	// First call succeeds.
+	body := `{"username":"myadmin","password":"secure-password-123"}`
+	req := httptest.NewRequest("POST", "/setup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("first setup status = %d, want 200", w.Code)
+	}
+
+	// Second call is rejected.
+	req = httptest.NewRequest("POST", "/setup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("second setup status = %d, want 404; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSetupRejectsShortPassword(t *testing.T) {
+	handler, _ := setupEmptyHandler(t)
+
+	body := `{"username":"myadmin","password":"short"}`
+	req := httptest.NewRequest("POST", "/setup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Error("setup should reject short passwords")
+	}
+}
+
+func TestSetupNotAvailableWithCustomAuth(t *testing.T) {
+	sum.Reset()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	store, err := creds.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open test store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	custom := func(_ context.Context, r *http.Request) (rocco.Identity, error) {
+		return &AdminIdentity{username: "ext", scopes: []string{ScopeAdmin}}, nil
+	}
+
+	// nil userStore = no setup endpoint.
+	handler := NewHandler(store, custom, nil)
+
+	body := `{"username":"myadmin","password":"secure-password-123"}`
+	req := httptest.NewRequest("POST", "/setup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Error("setup should not be available with custom authenticator")
+	}
+}
+
+func TestSetupUnavailableWhenAlreadyInitialized(t *testing.T) {
+	handler, userStore := setupEmptyHandler(t)
+
+	// Initialize directly via the store.
+	if err := userStore.Initialize(t.Context(), "existing", "existing-password-123"); err != nil {
+		t.Fatalf("initialize store: %v", err)
+	}
+
+	body := `{"username":"myadmin","password":"secure-password-123"}`
+	req := httptest.NewRequest("POST", "/setup", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("setup when initialized status = %d, want 404; body: %s", w.Code, w.Body.String())
 	}
 }

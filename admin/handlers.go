@@ -1,6 +1,9 @@
 package admin
 
 import (
+	"sync/atomic"
+
+	"github.com/zoobz-io/kuang/internal/auth"
 	"github.com/zoobz-io/kuang/internal/creds"
 	"github.com/zoobz-io/rocco"
 )
@@ -8,13 +11,37 @@ import (
 // ScopeAdmin is the scope required for all admin endpoints.
 const ScopeAdmin = "admin"
 
-func endpoints(store *creds.Store) []rocco.Endpoint {
-	return []rocco.Endpoint{
+func endpoints(store *creds.Store, setupEndpoint ...rocco.Endpoint) []rocco.Endpoint {
+	eps := []rocco.Endpoint{
 		listCredentials(store),
 		getCredential(store),
 		setCredential(store),
 		deleteCredential(store),
 	}
+	eps = append(eps, setupEndpoint...)
+	return eps
+}
+
+func setup(userStore *auth.Store) rocco.Endpoint {
+	var done atomic.Bool
+	return rocco.POST[SetupRequest, SetupResponse]("/setup", func(r *rocco.Request[SetupRequest]) (SetupResponse, error) {
+		if done.Load() {
+			return SetupResponse{}, rocco.ErrNotFound.WithMessage("setup already completed")
+		}
+		initialized, err := userStore.Initialized(r)
+		if err != nil {
+			return SetupResponse{}, rocco.ErrInternalServer.WithMessage("failed to check initialization state")
+		}
+		if initialized {
+			done.Store(true)
+			return SetupResponse{}, rocco.ErrNotFound.WithMessage("setup already completed")
+		}
+		if err := userStore.Initialize(r, r.Body.Username, r.Body.Password); err != nil {
+			return SetupResponse{}, rocco.ErrInternalServer.WithMessage("failed to initialize")
+		}
+		done.Store(true)
+		return SetupResponse{Username: r.Body.Username}, nil
+	}).WithName("setup").WithSummary("First-time admin setup").WithTags("setup").WithErrors(rocco.ErrNotFound, rocco.ErrInternalServer)
 }
 
 func listCredentials(store *creds.Store) rocco.Endpoint {
