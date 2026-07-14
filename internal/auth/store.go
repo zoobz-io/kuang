@@ -12,6 +12,11 @@ import (
 	astqlsqlite "github.com/zoobz-io/astql/sqlite"
 )
 
+// bcryptCost is the cost used when hashing admin passwords. It defaults to
+// bcrypt.DefaultCost in production; tests lower it to bcrypt.MinCost so the
+// suite stays fast (bcrypt is deliberately expensive at production cost).
+var bcryptCost = bcrypt.DefaultCost
+
 // user is the database model for admin users.
 type user struct {
 	ID       string `db:"id" constraints:"primarykey"`
@@ -49,7 +54,7 @@ func OpenStore(path string) (*Store, error) {
 
 // Create adds a new admin user with a bcrypt-hashed password.
 func (s *Store) Create(ctx context.Context, username, password string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
@@ -106,7 +111,7 @@ func (s *Store) Initialize(ctx context.Context, username, password string) error
 		return fmt.Errorf("already initialized")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}

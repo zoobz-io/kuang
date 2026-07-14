@@ -23,7 +23,7 @@ import (
 	"github.com/zoobz-io/rocco"
 	"github.com/zoobz-io/sctx"
 
-	"github.com/zoobz-io/kuang/config"
+	"github.com/zoobzio/kuang/api/config"
 )
 
 // testPKI holds all generated certificates and keys for a test run.

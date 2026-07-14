@@ -2,10 +2,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
-	"github.com/zoobz-io/kuang/mcp"
+	"github.com/zoobz-io/fig"
+	"github.com/zoobzio/kuang/internal/mcp"
 )
 
 func main() {
@@ -15,12 +17,13 @@ func main() {
 }
 
 func run() error {
-	baseURL := envOrDefault("KUANG_URL", "https://localhost:8080")
-	caCert := envOrDefault("KUANG_CA_CERT", "certs/ca.pem")
-	cert := envOrDefault("KUANG_CERT", "certs/client.pem")
-	key := envOrDefault("KUANG_KEY", "certs/client-key.pem")
+	// Load configuration.
+	var cfg mcp.Config
+	if err := fig.Load(&cfg); err != nil {
+		return fmt.Errorf("load security config: %w", err)
+	}
 
-	client, err := mcp.NewClient(baseURL, caCert, cert, key)
+	client, err := mcp.NewClient(cfg)
 	if err != nil {
 		return err
 	}
@@ -33,11 +36,4 @@ func run() error {
 	log.Printf("kuang-mcp: loaded %d tools", server.ToolCount())
 
 	return server.Run(os.Stdin, os.Stdout)
-}
-
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }

@@ -1,97 +1,155 @@
 # kuang
 
-A template repository for building Go applications with the zoobzio framework.
+An mTLS security boundary that exposes **scope-filtered tools to AI agents** over
+[MCP](https://modelcontextprotocol.io).
 
 ## Overview
 
-kuang provides a production-ready project structure built on [sum](https://github.com/zoobzio/sum), following patterns established in real-world applications. It includes:
+kuang sits between AI agents and the upstream APIs they need (GitHub, Matrix, …).
+Each agent runs in its own container, holds its own client certificate, and talks
+to kuang over mutual TLS. The certificate **is** the agent's identity: its
+CommonName names the agent and its Organizational Unit entries carry the scopes it
+has been granted. kuang terminates the mTLS connection, resolves that identity, and
+serves the agent an OpenAPI spec filtered to exactly the operations its scopes
+allow. An MCP bridge turns that spec into MCP tools, so an agent only ever discovers
+and calls tools it is authorized for.
 
-- Type-safe service registry via sum
-- HTTP server with OpenAPI support via rocco
-- Database access patterns via grub/astql
-- Configuration management via fig
-- Event system via capitan
-- Comprehensive testing infrastructure
+kuang is a **framework, not a deployable app**. You write a small Go `main` that
+imports kuang and composes the modules you want:
 
-## Project Structure
+```go
+package main
+
+import (
+    "log"
+
+    "github.com/zoobzio/kuang/core"
+    "github.com/zoobzio/kuang/modules/github"
+    "github.com/zoobzio/kuang/modules/matrix"
+    githubcfg "github.com/zoobzio/kuang/modules/github/config"
+    matrixcfg "github.com/zoobzio/kuang/modules/matrix/config"
+)
+
+func main() {
+    err := core.Run(
+        github.Module(githubcfg.API{Owner: "zoobzio"}),
+        matrix.Module(matrixcfg.API{Homeserver: "https://matrix.org"}),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+Install only the modules you need — each is a separate Go module.
+
+## How it fits together
+
+```
+┌─────────────┐   stdio    ┌────────────┐    mTLS     ┌─────────────────────┐
+│  AI agent   │◀──MCP────▶ │  cmd/mcp   │◀──HTTPS───▶ │   kuang (core.Run)  │
+│ (container) │            │  (bridge)  │             │                     │
+└─────────────┘            └────────────┘             │  auth.Terminate     │  cert → identity + scopes
+      │ owns cert                                     │  extend.OpenAPI     │  spec filtered by scope
+      │ (CN=agent, OU=scopes)                         │  modules → handlers │
+                                                      │  ResolveBearer      │  per-agent upstream token
+                                                      └──────────┬──────────┘
+                                                                 │ httpc (Bearer <agent token>)
+                                                                 ▼
+                                                        upstream APIs (GitHub, Matrix, …)
+```
+
+1. The MCP bridge (`cmd/mcp`) fetches `GET /openapi` over mTLS. Because the request
+   carries the agent's cert, kuang returns a **scope-filtered** spec.
+2. Each OpenAPI operation becomes one MCP tool. `tools/call` is proxied back to
+   kuang as the corresponding HTTP request.
+3. A module handler resolves the calling agent's stored upstream token
+   (keyed by identity + credential key) and calls the third-party API on its behalf.
+
+See the memory notes and package READMEs for the full design rationale.
+
+## Project structure
 
 ```
 kuang/
-├── cmd/app/          # Application entrypoint
-├── config/           # Configuration types
-├── contracts/        # Interface definitions
-├── models/           # Domain models
-├── stores/           # Data access implementations
-├── handlers/         # HTTP handlers
-├── wire/             # Request/response types
-├── transformers/     # Model ↔ Wire mapping
-├── events/           # Event definitions
-├── testing/          # Test infrastructure
-├── internal/otel/    # OpenTelemetry setup
-├── migrations/       # SQL migrations
-└── .github/workflows # CI/CD
+├── core/              # Framework entrypoint: core.Run + auth-aware endpoint helpers
+├── api/               # Built-in per-agent credential API
+│   ├── config/        #   Security + Server config (fig)
+│   ├── contracts/     #   Credentials interface (DI seam)
+│   ├── models/        #   grub persistence model
+│   ├── wire/          #   HTTP request/response DTOs
+│   ├── stores/        #   SQLite credential store
+│   ├── handlers/      #   /creds endpoints
+│   ├── events/        #   capitan startup signals
+│   └── extend/        #   Scoped-OpenAPI interceptor
+├── internal/
+│   ├── auth/          # mTLS termination + sctx identity/scopes
+│   ├── httpc/         # Instrumented outbound HTTP client
+│   ├── mcp/           # OpenAPI → MCP bridge (stdio)
+│   └── otel/          # OpenTelemetry providers
+├── modules/           # Pluggable tool packs (separate Go modules)
+│   ├── github/        #   GitHub REST tools
+│   └── matrix/        #   Matrix client-server tools
+└── cmd/mcp/           # The MCP bridge binary
 ```
 
-Each directory contains a README explaining its purpose and usage patterns.
+Each directory carries a README explaining its role.
 
-## Getting Started
+## Configuration
 
-```bash
-# Install dependencies
-go mod tidy
+kuang is configured entirely through environment variables (loaded via `fig`).
 
-# Run the application
-make run
+**Server** (`api/config`):
 
-# Run tests
-make test
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `KUANG_HOST` | `localhost` | Listen host |
+| `KUANG_PORT` | `8080` | Listen port |
+| `KUANG_DB_PATH` | `data/kuang.db` | SQLite credential store (auto-created) |
 
-# Run linter
-make lint
+**Security / mTLS** (`api/config`):
 
-# Full CI check
-make check
-```
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `APP_CA_CERT_PATH` | `certs/ca.pem` | CA used to verify client (agent) certs |
+| `APP_CERT_PATH` | `certs/server.pem` | Server leaf certificate |
+| `APP_KEY_PATH` | `certs/server-key.pem` | Server private key |
+| `APP_CRYPTO_ALGO` | `ed25519` | `ed25519` or `ecdsa-p256` |
+| `APP_REQUIRE_MTLS` | `true` | `true` → require & verify client cert |
+
+**MCP bridge** (`cmd/mcp`): `KUANG_URL`, `KUANG_CA_CERT`, `KUANG_CERT`, `KUANG_KEY`
+— see [`cmd/mcp/README.md`](cmd/mcp/README.md).
+
+**Telemetry** (`internal/otel`): `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`.
+
+kuang does **not** issue certificates. It trusts a CA and expects server/agent certs
+to be provisioned externally (e.g. by a step-ca provisioner that stamps agent scopes
+into the cert OU). Point `APP_CA_CERT_PATH` at that CA.
 
 ## Development
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.25+
 - golangci-lint v2.7.2
 
-### Install Tools
-
 ```bash
-make install-tools
-make install-hooks
+make install-tools    # golangci-lint
+make build            # build the MCP bridge (bin/kuang-mcp)
+make test             # go test -race ./...
+make lint             # golangci-lint
 ```
 
-### Make Commands
+`internal/otel` can export traces/logs/metrics to any OTLP endpoint via
+`OTEL_EXPORTER_OTLP_ENDPOINT` — point it at your own collector.
 
-| Command | Description |
-|---------|-------------|
-| `make build` | Build the application binary |
-| `make run` | Run the application |
-| `make test` | Run all tests with race detector |
-| `make test-unit` | Run unit tests only |
-| `make test-integration` | Run integration tests |
-| `make test-bench` | Run benchmarks |
-| `make lint` | Run linters |
-| `make coverage` | Generate coverage report |
-| `make check` | Run tests + lint |
-| `make ci` | Full CI simulation |
-
-## Architecture
-
-The application follows a layered architecture with clear dependency rules:
-
-1. **contracts** - Define interfaces, depend only on models
-2. **models** - Domain models, no internal dependencies
-3. **stores** - Implement contracts, depend on models
-4. **handlers** - HTTP layer, depend on contracts/wire/transformers
-5. **wire** - API types, depend on models (for transformation)
-6. **transformers** - Pure mapping functions between models and wire
+> **Known gap:** the build/run tooling (`make build`, `make run`, `.air.toml`,
+> `.goreleaser.yml`, and the `app`/`postgres`/`redis`/`minio`/`migrate` services in
+> `docker-compose.yml`) still references the pre-refactor template layout
+> (`cmd/app`, `admin/`, `testing/`, `migrations/`) and is **not wired to the current
+> code**. kuang no longer ships a server `main` — `core.Run` is a library entrypoint
+> that a consumer's `main` calls (see the Overview). These files should be
+> reconciled with the real layout in a follow-up.
 
 ## License
 

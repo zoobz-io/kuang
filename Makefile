@@ -1,9 +1,13 @@
-.PHONY: build run test test-unit test-integration test-bench lint lint-fix coverage clean help check ci install-tools install-hooks dev dev-down dev-logs dev-reset
+.PHONY: build test test-unit lint lint-fix coverage clean help check ci install-tools install-hooks
 
 .DEFAULT_GOAL := help
 
 APP_NAME := kuang
 BIN_DIR := bin
+
+# Go modules in this workspace. Each is a separate module (own go.mod), so
+# go test / golangci-lint must be run inside each one.
+MODULES := . modules/github modules/matrix
 
 help: ## Display available commands
 	@echo "$(APP_NAME) Development Commands"
@@ -11,81 +15,55 @@ help: ## Display available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 # =============================================================================
-# Build & Run
+# Build
 # =============================================================================
+# kuang is a framework: `core.Run` is a library entrypoint a consumer's own
+# main calls. The only binary in this repo is the MCP bridge (cmd/mcp).
 
-build: ## Build the application binary
+build: ## Build the MCP bridge binary & the default Kuang server
 	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/$(APP_NAME) ./cmd/app
-
-build-admin: ## Build the admin binary
-	@mkdir -p $(BIN_DIR)
-	@cd admin && go build -o ../$(BIN_DIR)/admin ./cmd/admin
-
-run: ## Run the application locally
-	@go run ./cmd/app
-
-# =============================================================================
-# Docker Development Environment
-# =============================================================================
-
-dev: ## Start development environment (docker compose)
-	@docker compose up -d
-	@echo ""
-	@echo "Services started:"
-	@echo "  App:        http://localhost:8080"
-	@echo "  Grafana:    http://localhost:3000"
-	@echo "  Jaeger:     http://localhost:16686"
-	@echo "  Prometheus: http://localhost:9090"
-	@echo "  MinIO:      http://localhost:9001"
-	@echo ""
-	@echo "Run 'make dev-logs' to tail application logs"
-
-dev-down: ## Stop development environment
-	@docker compose down
-
-dev-logs: ## Tail application logs
-	@docker compose logs -f app
-
-dev-reset: ## Reset development environment (removes volumes)
-	@docker compose down -v
-	@echo "All volumes removed. Run 'make dev' to start fresh."
+	@go build -o $(BIN_DIR)/mcp ./cmd/mcp
+	@go build -o $(BIN_DIR)/kuang ./cmd/kuang
 
 # =============================================================================
 # Testing
 # =============================================================================
+# The `testing` build tag enables test-only hooks in dependencies (e.g.
+# sctx.ResetAdminForTesting).
 
-test: ## Run all tests with race detector
-	@go test -v -race -tags testing ./...
+test: ## Run all tests with race detector (all modules)
+	@for dir in $(MODULES); do \
+		echo "==> test $$dir"; \
+		(cd $$dir && go test -race -tags testing ./...) || exit 1; \
+	done
 
-test-unit: ## Run unit tests only (short mode)
-	@go test -v -race -tags testing -short ./...
-
-test-integration: ## Run integration tests
-	@go test -v -race -tags testing ./testing/integration/...
-
-test-bench: ## Run benchmarks
-	@go test -tags testing -bench=. -benchmem -benchtime=1s ./testing/benchmarks/...
+test-unit: ## Run unit tests only (short mode, all modules)
+	@for dir in $(MODULES); do \
+		echo "==> test $$dir"; \
+		(cd $$dir && go test -race -tags testing -short ./...) || exit 1; \
+	done
 
 # =============================================================================
 # Code Quality
 # =============================================================================
 
-lint: ## Run linters
-	@golangci-lint run --config=.golangci.yml --timeout=5m
+lint: ## Run linters (all modules)
+	@for dir in $(MODULES); do \
+		echo "==> lint $$dir"; \
+		(cd $$dir && golangci-lint run --config=$(CURDIR)/.golangci.yml --timeout=5m) || exit 1; \
+	done
 
-lint-fix: ## Run linters with auto-fix
-	@golangci-lint run --config=.golangci.yml --fix
+lint-fix: ## Run linters with auto-fix (all modules)
+	@for dir in $(MODULES); do \
+		echo "==> lint-fix $$dir"; \
+		(cd $$dir && golangci-lint run --config=$(CURDIR)/.golangci.yml --fix) || exit 1; \
+	done
 
-coverage: ## Generate coverage report (unit + integration)
-	@go test -tags testing -coverprofile=coverage-unit.out -covermode=atomic ./...
-	@go test -tags testing -coverprofile=coverage-integration.out -covermode=atomic ./testing/integration/... 2>/dev/null || true
-	@echo "mode: atomic" > coverage.out
-	@tail -n +2 coverage-unit.out >> coverage.out
-	@tail -n +2 coverage-integration.out >> coverage.out 2>/dev/null || true
-	@go tool cover -html=coverage.out -o coverage.html
-	@go tool cover -func=coverage.out | tail -1
-	@echo "Coverage report: coverage.html"
+coverage: ## Generate coverage report (all modules)
+	@for dir in $(MODULES); do \
+		echo "==> coverage $$dir"; \
+		(cd $$dir && go test -tags testing -covermode=atomic -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | tail -1) || exit 1; \
+	done
 
 # =============================================================================
 # Maintenance
@@ -93,14 +71,13 @@ coverage: ## Generate coverage report (unit + integration)
 
 clean: ## Remove generated files
 	@rm -rf $(BIN_DIR) tmp
-	@rm -f coverage.out coverage.html coverage.txt coverage-unit.out coverage-integration.out
+	@rm -f coverage.out coverage.html coverage.txt
+	@rm -f modules/github/coverage.out modules/matrix/coverage.out
 	@find . -name "*.test" -delete
 	@find . -name "*.prof" -delete
-	@find . -name "*.out" -delete
 
 install-tools: ## Install development tools
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2
-	@go install github.com/air-verse/air@latest
 
 install-hooks: ## Install git pre-commit hook
 	@mkdir -p .git/hooks
@@ -116,5 +93,5 @@ install-hooks: ## Install git pre-commit hook
 check: test lint ## Run tests and lint (quick validation)
 	@echo "All checks passed!"
 
-ci: clean lint test coverage test-bench ## Full CI simulation
+ci: clean lint test coverage ## Full CI simulation
 	@echo "CI simulation complete!"

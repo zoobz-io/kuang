@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/zoobz-io/kuang/config"
 	"github.com/zoobz-io/sctx"
+	"github.com/zoobzio/kuang/api/config"
 )
 
 // AgentMeta is the metadata carried in every security context.
