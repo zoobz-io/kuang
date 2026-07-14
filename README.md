@@ -26,14 +26,12 @@ import (
     "github.com/zoobzio/kuang/core"
     "github.com/zoobzio/kuang/modules/github"
     "github.com/zoobzio/kuang/modules/matrix"
-    githubcfg "github.com/zoobzio/kuang/modules/github/config"
-    matrixcfg "github.com/zoobzio/kuang/modules/matrix/config"
 )
 
 func main() {
     err := core.Run(
-        github.Module(githubcfg.API{Owner: "zoobzio"}),
-        matrix.Module(matrixcfg.API{Homeserver: "https://matrix.org"}),
+        github.Module(),
+        matrix.Module(),
     )
     if err != nil {
         log.Fatal(err)
@@ -41,7 +39,9 @@ func main() {
 }
 ```
 
-Install only the modules you need — each is a separate Go module.
+Install only the modules you need — each is a separate Go module. Modules take no
+constructor arguments: each loads its own configuration from the environment via
+`fig` when `core.Run` invokes it.
 
 ## How it fits together
 
@@ -117,8 +117,8 @@ kuang is configured entirely through environment variables (loaded via `fig`).
 | `APP_CRYPTO_ALGO` | `ed25519` | `ed25519` or `ecdsa-p256` |
 | `APP_REQUIRE_MTLS` | `true` | `true` → require & verify client cert |
 
-**MCP bridge** (`cmd/mcp`): `KUANG_URL`, `KUANG_CA_CERT`, `KUANG_CERT`, `KUANG_KEY`
-— see [`cmd/mcp/README.md`](cmd/mcp/README.md).
+**MCP bridge** (`cmd/mcp`): `KUANG_API_HOST`, `KUANG_API_CA_CERT_PATH`,
+`KUANG_API_CERT_PATH`, `KUANG_API_KEY_PATH` — see [`cmd/mcp/README.md`](cmd/mcp/README.md).
 
 **Telemetry** (`internal/otel`): `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`.
 
@@ -143,13 +143,10 @@ make lint             # golangci-lint
 `internal/otel` can export traces/logs/metrics to any OTLP endpoint via
 `OTEL_EXPORTER_OTLP_ENDPOINT` — point it at your own collector.
 
-> **Known gap:** the build/run tooling (`make build`, `make run`, `.air.toml`,
-> `.goreleaser.yml`, and the `app`/`postgres`/`redis`/`minio`/`migrate` services in
-> `docker-compose.yml`) still references the pre-refactor template layout
-> (`cmd/app`, `admin/`, `testing/`, `migrations/`) and is **not wired to the current
-> code**. kuang no longer ships a server `main` — `core.Run` is a library entrypoint
-> that a consumer's `main` calls (see the Overview). These files should be
-> reconciled with the real layout in a follow-up.
+`core.Run` is a library entrypoint a consumer's own `main` calls (see the Overview).
+For convenience the repo also ships `cmd/kuang` — a ready-to-run server `main` that
+composes the bundled `github` and `matrix` modules; `make build` produces both it
+(`bin/kuang`) and the MCP bridge (`bin/mcp`).
 
 ## License
 

@@ -21,7 +21,7 @@ type Client struct {
 
 // NewClient creates an HTTP client configured for mTLS.
 func NewClient(cfg Config) (*Client, error) {
-	caPEM, err := os.ReadFile(cfg.Cert) //nolint:gosec // cert paths are user-configured
+	caPEM, err := os.ReadFile(cfg.CA) //nolint:gosec // cert paths are user-configured
 	if err != nil {
 		return nil, fmt.Errorf("read CA cert: %w", err)
 	}

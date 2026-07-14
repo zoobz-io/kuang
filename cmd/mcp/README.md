@@ -28,10 +28,10 @@ All via environment variables (no flags):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `KUANG_URL` | `https://localhost:8080` | kuang server base URL |
-| `KUANG_CA_CERT` | `certs/ca.pem` | CA that signed the kuang server cert |
-| `KUANG_CERT` | `certs/client.pem` | This agent's client certificate |
-| `KUANG_KEY` | `certs/client-key.pem` | This agent's private key |
+| `KUANG_API_HOST` | _(required)_ | kuang server base URL |
+| `KUANG_API_CA_CERT_PATH` | `certs/ca.pem` | CA that signed the kuang server cert |
+| `KUANG_API_CERT_PATH` | `certs/client.pem` | This agent's client certificate |
+| `KUANG_API_KEY_PATH` | `certs/client-key.pem` | This agent's private key |
 
 The client cert must be signed by the CA the kuang server trusts
 (`APP_CA_CERT_PATH`), and its CN/OU determine the agent's identity and scopes.
@@ -51,10 +51,10 @@ configuration:
     "kuang": {
       "command": "/path/to/kuang-mcp",
       "env": {
-        "KUANG_URL": "https://kuang.internal:8080",
-        "KUANG_CA_CERT": "/root/.jack/certs/ca.pem",
-        "KUANG_CERT": "/root/.jack/certs/cert.pem",
-        "KUANG_KEY": "/root/.jack/certs/key.pem"
+        "KUANG_API_HOST": "https://kuang.internal:8080",
+        "KUANG_API_CA_CERT_PATH": "/root/.jack/certs/ca.pem",
+        "KUANG_API_CERT_PATH": "/root/.jack/certs/cert.pem",
+        "KUANG_API_KEY_PATH": "/root/.jack/certs/key.pem"
       }
     }
   }
